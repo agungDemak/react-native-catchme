@@ -1,0 +1,3 @@
+rootProject.name = 'CatchMe'
+
+include ':app'
