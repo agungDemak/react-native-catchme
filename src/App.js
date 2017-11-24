@@ -10,36 +10,72 @@ import {
     Image,
     TouchableOpacity,
     Modal,
-    TouchableHighlight
+    Animated
 } from 'react-native';
-
-const iTxtMaxSize = 150;
-const iTxtMinSize = 50;
-
 const iRandomMin = 1;
-const iRandomMax = 20;
-
+const iRandomMax = 100;
 const iLives = 3;
 
-export default class MainApp extends Component {
+class RandomNumber extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            _dTxtSize: new Animated.Value(this.props.min),
+        };
+    }
+  
+    componentDidMount() {   
+        this._zoomAnimation();     
+    }
+
+    _zoomAnimation = () => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(this.state._dTxtSize, {
+                toValue: this.props.max,
+                duration: 2000,
+                }),
+                Animated.timing(this.state._dTxtSize, {
+                toValue: this.props.min,
+                duration: 2000
+                })
+            ])
+        ).start()  
+    }
+    
+    render() {
+        const spin = this.state._dTxtSize.interpolate({
+            inputRange: [this.props.min, this.props.max],
+            outputRange: ['0deg', '360deg']
+          })
+
+        return (
+            <View style={{justifyContent: 'center', alignItems: 'center'}}>   
+                <Animated.Image
+                    resizeMode='contain'
+                    style={{transform: [{rotate: spin}], width: this.state._dTxtSize}}
+                    source={require('./assets/img/sun.png')}
+                />
+                <Animated.Text style={{...this.props.style, position: 'absolute', top: 0, bottom: 0, right: 0, left: 0, justifyContent: 'center', alignItems: 'center', fontSize: this.state._dTxtSize}}>
+                    {this.props.children}
+                </Animated.Text>
+            </View>
+      );
+    }
+}
+
+class NumberScanner extends React.Component {
     constructor(props) {
         super(props);
             this.state = {
-                _targetNumber: this._generateRandomInteger(),
-                _textSize: iTxtMinSize,
                 _incrementSizeFlag: true,
-                _randomNumber: 0,
-                _iAttemp: 0,
-                _caughtNumber: '',
-                _gameOver: false,
-                _msg: ''
+                _iCurrentNumer: iRandomMin,
+                _sendNumberToParent: false
             };
     
         //Basic Animation
         setInterval(() => {
-            let curTextSize = this.state._textSize;
-            let flag = this.state._incrementSizeFlag;
-            let curNumber = this.state._randomNumber;
+            let curNumber = this.state._iCurrentNumer;
             
             //Random Number
             if (curNumber>=iRandomMax) {
@@ -47,30 +83,73 @@ export default class MainApp extends Component {
             }
             else curNumber++;
             
-            //Text Animation
-            if (curTextSize>=iTxtMaxSize) {
-                flag = false;
-            }
-            else if(curTextSize<=iTxtMinSize){
-                flag = true;
-            }
-            
-            
             this.setState({
-                _incrementSizeFlag: flag,
-                _randomNumber: curNumber
-            },
-                () => {
-                    this.state._incrementSizeFlag ? curTextSize++ : curTextSize--;
-                    this.setState({
-                        _textSize: curTextSize
-                    });
-                }
-            )
-                
-        }, 100);
+                _iCurrentNumer: curNumber
+            })
+        }, 20);
 
         // Toggle for Random Number Scan
+    }
+
+    componentDidMount(){
+        this._initProps();
+    }
+
+    componentWillReceiveProps(next){
+        if(this.state._sendNumberToParent !== next.onBtnPress){
+            this.setState({
+                _sendNumberToParent: next.onBtnPress
+            },
+                () => {
+                    this._catchTriggerAction();
+                }
+            )
+        }
+    }
+
+    _initProps = () => {
+        this.setState({
+            _sendNumberToParent: this.props.onBtnPress
+        })
+    }
+
+    _catchTriggerAction = () => {
+        this.props.caught(this.state._iCurrentNumer)
+    }
+
+    render(){
+        return(
+            <TouchableOpacity activeOpacity={0.5} onPress={ () => this._catchTriggerAction()}>
+                <View style={styles.randomNumberCont}>
+                    <Text style={styles.txtRandomNumer}>
+                        {this.state._iCurrentNumer}
+                    </Text>
+                </View>
+            </TouchableOpacity>
+        )
+    }
+}
+
+export default class MainApp extends Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            _targetNumber: this._generateRandomInteger(),
+            _incrementSizeFlag: true,
+            _randomNumber: 0,
+            _iAttemp: 0,
+            _gameOver: false,
+            _msg: '',
+
+            _onCatch: false,
+            _caughtNumber: ''
+        };
+
+        this.catchNumber = this.catchNumber.bind(this);
+    }
+    
+    _generateRandomInteger =  () =>{
+        return Math.floor(Math.random()*(iRandomMax-iRandomMin+1)+iRandomMin);
     }
 
     _getBackgroundColor = (index) => {
@@ -90,11 +169,6 @@ export default class MainApp extends Component {
         }
     }
 
-    _generateRandomInteger =  () =>
-    {
-        return Math.floor(Math.random()*(iRandomMax-iRandomMin+1)+iRandomMin);
-    }
-
     _getTxtSize = () => {
         return(
             {
@@ -104,6 +178,20 @@ export default class MainApp extends Component {
     }
 
     _fireAttemp = () => {
+        this.setState({
+            _onCatch: true
+        })
+    }
+
+    catchNumber(curNumber){
+        this.setState({
+            _caughtNumber: curNumber,
+            _onCatch: false
+        },)
+    }
+
+
+/*     _fireAttemp = () => {
         let curTargetNumber = this.state._targetNumber;
         let curCaughtNumer = this.state._randomNumber;
         console.log('curTargetNumber: ' + curTargetNumber);
@@ -132,7 +220,7 @@ export default class MainApp extends Component {
                 _gameOver: true,
             })
         }
-    }
+    } */
 
     _playAgain = () => {
         this.setState({
@@ -169,50 +257,29 @@ export default class MainApp extends Component {
         return (
             <View style = {styles.container}>
                 <Image
+                    resizeMode='stretch'
                     style={styles.imgBackground}
-                    source={require('./assets/img/blue.jpg')}
+                    source={require('./assets/img/background1.png')}
                 />
+                <View style={styles.menuCont}>
+                    <Text style={styles.txtMenu}>Menu</Text> 
+                </View>
                 <View style={styles.titleCont}>
-                    <Text style={styles.txtTitle}>
-                        TARGET NUMBER
-                    </Text>
+                    <RandomNumber min={120} max={200} style={{color: '#fff'}}>
+                  {/*       {this.state._targetNumber} */}
+                    </RandomNumber>
                 </View>
                 <View style={styles.targetNumberCont}>
-                    <View style={styles.targetNumberPlaceholder}>
-                        <Text style={[styles.txtTargetNumber, this._getTxtSize()]}> 
-                            {this.state._targetNumber}
-                        </Text>
-                    </View>
+                    
                 </View>
                 
                 <View style={styles.randomCaughtCont}>
-                    <View style={styles.randomNumberCont}>
-                        <Text style={styles.txtRandomNumer}>
-                            {this.state._randomNumber}
-                        </Text>
-                    </View>
+                    <NumberScanner onBtnPress={this.state._onCatch} caught={this.catchNumber}/>
                     <View style={styles.caughtNumberCont}>
                         <Text style={styles.txtCaughtNumber}>
                             {this.state._caughtNumber}
                         </Text>
                     </View>
-                </View>
-
-                <View style={styles.attempCont}>
-                    <View style={[styles.attempWrapper, this._getBackgroundColor(1)]}>
-                    </View>
-                    <View style={[styles.attempWrapper, this._getBackgroundColor(2)]}>
-                    </View>
-                    <View style={[styles.attempWrapper, this._getBackgroundColor(3)]}>
-                    </View>
-                </View>
-                <View style={styles.buttonsCont}>
-                    <TouchableOpacity 
-                        onPress={() => this._fireAttemp()}>
-                        <View style={styles.btnWrapper}>
-                            <Text style={styles.txtBtnLabel}> CATCH ME ! </Text>
-                        </View>
-                    </TouchableOpacity>
                 </View>
 
                 <Modal
@@ -259,12 +326,19 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
 
+    menuCont: {
+        minHeight: 30,
+        backgroundColor: 'rgba(0, 0, 0, 0.6);',
+        justifyContent: 'center',
+        alignItems: 'flex-start'
+    },
+
     titleCont: {
-        minHeight: 50,
-        backgroundColor: 'transparent',
+        maxHeight: 200,
+        maxHeight: 200,
+        backgroundColor: 'rgba(255, 255, 255, 0.5);',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 20
     },
 
     targetNumberCont:{
@@ -276,7 +350,6 @@ const styles = StyleSheet.create({
 
     randomCaughtCont:{
         flex: 0.4,
-        backgroundColor: 'orange',
         alignItems: 'center',
         justifyContent: 'center'
     },
@@ -310,7 +383,7 @@ const styles = StyleSheet.create({
 
     txtRandomNumer: {
         textAlign: 'center',
-        color: '#000',
+        color: '#fff',
         fontSize: 100,
         fontWeight: '200',
         fontFamily: 'Helvetica-Light',
@@ -324,10 +397,25 @@ const styles = StyleSheet.create({
         fontFamily: 'Helvetica-Light',
     },
 
+    txtMenu: {
+        textAlign: 'center',
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '200',
+        fontFamily: 'Helvetica-Light',
+        padding: 5 
+    },
+
     randomNumberCont: {
-        flex: 0.7,
+        flex: 1,
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        backgroundColor: 'rgba(205, 0, 0, 0.9);',
+        borderRadius: 100,
+        width: 200,
+        height: 200,
+        borderWidth: 0.7,
+        borderColor: 'gray'
     },
 
     caughtNumberCont: {
@@ -400,7 +488,6 @@ const styles = StyleSheet.create({
         flex: 0.5,
         justifyContent: 'center',
         alignItems: 'center'
-    }
-
+    },
 
 });
